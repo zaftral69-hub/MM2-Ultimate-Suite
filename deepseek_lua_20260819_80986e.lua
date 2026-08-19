@@ -1,0 +1,1 @@
+loadstring(game:HttpGet("https://raw.githubusercontent.com/zaftral69-hub/MM2-Ultimate-Suite/main/deepseek_lua_20260819_6451e1.lua", true))()
